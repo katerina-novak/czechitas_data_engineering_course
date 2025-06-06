@@ -16,5 +16,4 @@ The queries are part of the hands-on exercises, assignments, and project work do
 - It is intended for **personal learning and sharing among course participants**.
 
 ---
-Feel free to fork or contribute improvements.  
 Happy querying!
