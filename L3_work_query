@@ -1,0 +1,75 @@
+--Marketing datamart
+--L3_mkt_product
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L3.L3_mkt_product` AS
+SELECT product_purchase_id
+  , contract_id
+  , product_id
+  , product_name
+  , product_type
+  , product_valid_from
+  , product_valid_to
+  , measure_unit
+  , flag_unlimited_product
+FROM `warm-tokenizer-455319-m9.L2.L2_product_purchase`;
+
+
+--L3_mkt_contract
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L3.L3_mkt_contract` AS
+WITH L2_contract_adjusted AS (
+  SELECT *,
+    DATE_DIFF(contract_valid_to, contract_valid_from, DAY) AS day_diff
+  FROM `warm-tokenizer-455319-m9.L2.L2_contract`
+  WHERE contract_valid_from IS NOT NULL
+    AND contract_valid_to IS NOT NULL
+) -- vytvářím CTE, abych day_diff nemusela počítat vícekrát a mohla použít v selectu již vypočítanou hodnotu
+SELECT contract_id
+  , branch_id
+  , contract_valid_from
+  , contract_valid_to
+  , registration_end_reason
+  , flag_prolongation
+  , contract_status
+--, DATE_DIFF(contract_valid_to, contract_valid_from, DAY) AS day_diff -- pro kontrolu kategorizace níže
+  , CASE  -- kategorizace délky platnosti kontraktu
+    WHEN day_diff < (365/2) THEN "less than half year"
+    WHEN day_diff <= (365) THEN "1 year"
+    WHEN day_diff <= (365*2) THEN "2 years"
+    WHEN day_diff > (365*2) THEN "more then 2 years"
+    ELSE "other"
+    END AS contract_duration 
+ , EXTRACT(YEAR FROM contract_valid_from) AS start_year_of_contract -- rok kdy začíná platit smlouva
+FROM L2_contract_adjusted
+WHERE contract_valid_to > contract_valid_from;
+
+
+--L3_mkt_branch
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L3.L3_mkt_branch` AS
+SELECT branch_id
+  , branch_name
+FROM `warm-tokenizer-455319-m9.L2.L2_branch`;
+
+
+--L3_mkt_invoice
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L3.L3_mkt_invoice` AS
+SELECT i.invoice_id AS invoice_id
+  , i.contract_id AS contract_id
+  , i.paid_date AS paid_date
+  , i.amount_w_vat AS amount_w_vat
+  , i.return_w_vat AS return_w_vat
+  , (i.amount_w_vat - i.return_w_vat) AS total_paid
+ -- , pp.product_id -- optional, v tuto chvíli nevyužijeme
+
+FROM `warm-tokenizer-455319-m9.L2.L2_invoice` as i
+--LEFT JOIN `warm-tokenizer-455319-m9.L2.L2_product_purchase` AS pp ON i.contract_id = pp.contract_id;
+
+
+
+
+
+
+
+
+
+
+
+
