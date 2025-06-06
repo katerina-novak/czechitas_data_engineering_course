@@ -1,0 +1,164 @@
+--L1 google sheets DIM
+--L1 status
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L1.L1_status` AS
+SELECT 
+ CAST(id_status AS INT) AS product_status_id      -- nacastujeme na integer
+ , LOWER(status_name) AS product_status_name      -- dáváme všude lowercase, protože by jinak mohlo dělat problém v group by
+ , PARSE_DATE('%m/%d/%Y', date_update) as status_update_date
+FROM `warm-tokenizer-455319-m9.L0_google_sheets.status`
+WHERE id_status IS NOT NULL                                      -- nechceme nulové hodnoty
+  AND status_name IS NOT NULL                                    -- nechceme nulové hodnoty
+QUALIFY ROW_NUMBER() OVER(PARTITION BY product_status_id) = 1    -- kontrola na unique id
+;
+
+
+--L1 product
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L1.L1_product` AS
+SELECT
+ CAST(id_product AS INT) AS product_id   --nacastujeme na integer
+ , LOWER(name) AS product_name           -- dáváme lowercase
+ , LOWER(type) AS product_type     
+ , LOWER(category) AS product_category
+ , CAST(is_vat_applicable AS BOOL) AS is_vat_applicable
+ , PARSE_DATE('%m/%d/%Y', date_update) as product_update_date
+FROM `warm-tokenizer-455319-m9.L0_google_sheets.product`
+WHERE id_product IS NOT NULL
+  AND name IS NOT NULL
+QUALIFY ROW_NUMBER() OVER(PARTITION BY product_id) = 1
+;
+
+
+
+--L1 branch
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L1.L1_branch` AS
+SELECT
+ CAST(id_branch AS INT) AS branch_id
+ , branch_name
+ , PARSE_DATE('%m/%d/%Y', date_update) as product_status_update_date
+FROM `warm-tokenizer-455319-m9.L0_google_sheets.branch`
+WHERE id_branch != "NULL" 
+
+;
+
+
+
+
+-- L1_accounting_system
+-- L1_invoice
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L1.L1_invoice` AS
+SELECT
+ id_invoice AS invoice_id
+ , id_invoice_old AS invoice_previous_id --Id of previous invoice. if it's not null, means that current invoice id is credit note or return of the id_invoice_old
+ , invoice_id_contract AS contract_id -- FK
+ , status AS invoice_status_id
+ , IF(status < 100, TRUE, FALSE) AS flag_invoice_issued -- Invoice status. Invoice status < 100  have been issued. >= 100 - not issued
+ , id_branch AS branch_id
+ , DATE(date, "Europe/Prague") AS date_issue
+ , DATE(scadent, "Europe/Prague") AS due_date
+ , DATE(date_paid, "Europe/Prague") AS paid_date
+ , DATE(start_date, "Europe/Prague") AS start_date
+ , DATE(end_date, "Europe/Prague") AS end_date
+ , DATE(date_insert, "Europe/Prague") AS insert_date
+ , DATE(date_update, "Europe/Prague") AS update_date
+ , value AS amount_w_vat
+ , payed AS amount_payed
+ , flag_paid_currier
+ , invoice_type AS invoice_type_id
+ -- Invoice_type: 1 - invoice, 3 -  credit_note, 2 - return, 4 - other
+ , CASE
+    WHEN invoice_type = 1 THEN "invoice"
+    WHEN invoice_type = 2 THEN "return"
+    WHEN invoice_type = 3 THEN "credit_note"
+    WHEN invoice_type = 4 THEN "other"
+  END AS invoice_type
+ , number AS invoice_number
+-- , CAST(number AS INT) AS invoice_number
+ , value_storno AS return_w_vat,
+FROM `warm-tokenizer-455319-m9.L0_accounting_system.invoice`
+;
+
+
+
+--L1_invoice_load
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L1.L1_invoice_load` AS
+SELECT
+ id_load AS invoice_load_id
+ , id_contract AS contract_id
+ , CAST(id_package AS INT) AS package_id
+ , id_invoice AS invoice_id
+ , id_package_template AS product_id
+ , notlei AS price_wo_vat_usd
+ , currency
+ , tva AS vat_rate
+ , value AS price_w_vat_usd
+ , payed AS paid_w_vat_usd
+ , CASE
+    WHEN um IN ('mesia','m?síce','m?si?1ce','měsice','mesiace','měsíce','mesice') then  'month'
+    WHEN um = "kus" THEN "item"
+    WHEN um = "den" THEN "day"
+    WHEN um = "min" THEN "minutes"
+    WHEN um = '0' then null 
+    ELSE um
+  END AS unit -- sjdnocujeme překlepy, aby fungovalo group by a dáváme do EN
+ , quantity
+ , DATE(start_date, "Europe/Prague") AS start_date
+ , DATE(end_date, "Europe/Prague") AS end_date
+ , DATE(date_insert, "Europe/Prague") AS date_insert
+ , DATE(date_update, "Europe/Prague") AS date_update
+ , DATE(TIMESTAMP(load_date), "Europe/Prague") AS load_date
+FROM `warm-tokenizer-455319-m9.L0_accounting_system.invoice_load`
+;
+
+
+--L1_crm
+--L1_contract
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L1.L1_contract` AS
+SELECT
+ id_contract AS contract_id
+ , id_branch AS branch_id
+ , DATE(date_contract_valid_from, "Europe/Prague") as contract_valid_from
+ , DATE(TIMESTAMP(date_contract_valid_to), "Europe/Prague") as contract_valid_to
+ , DATE(date_registered, "Europe/Prague") as registration_date
+ , DATE(date_signed, "Europe/Prague") as signed_date
+ , DATE(activation_process_date, "Europe/Prague") as activation_process_date
+ , DATE(prolongation_date, "Europe/Prague") as prolongation_date
+ , registration_end_reason
+ , flag_prolongation --if contract  was prolonged
+ , flag_send_inv_email AS flag_send_email -- If the invoice is sent as email. True - yes, false - other methods
+ , contract_status
+ , DATE(TIMESTAMP(load_date), "Europe/Prague") as load_date
+FROM `warm-tokenizer-455319-m9.L0_crm.contract` 
+;
+
+
+--L1_product_purchase
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L1.L1_product_purchase` AS
+SELECT
+ packages.id_package AS product_purchase_id  -- PK
+ , packages.id_contract AS contract_id  -- FK
+ , packages.id_package_template AS product_id  -- FK
+ , DATE(packages.date_insert, "Europe/Prague") AS create_date
+ , DATE(TIMESTAMP(packages.start_date), "Europe/Prague") AS product_valid_from
+ , DATE(TIMESTAMP(packages.end_date), "Europe/Prague") AS product_valid_to
+ , packages.fee AS price_wo_vat
+ , DATE(packages.date_update, "Europe/Prague") AS date_update
+ , packages.package_status AS product_status_id  -- FK
+ , status.product_status_name as product_status
+ , product.product_name
+ , product.product_type
+ , product.product_category
+ , CASE
+    WHEN packages.measure_unit IN ('mesia','m?síce','m?si?1ce','měsice','mesiace','měsíce','mesice') then  'month'
+    WHEN packages.measure_unit = "kus" THEN "item"
+    WHEN packages.measure_unit = "den" THEN "day"
+    WHEN packages.measure_unit = "min" THEN "minutes"
+    ELSE packages.measure_unit
+  END AS measure_unit
+ , packages.id_branch as branch_id -- FK
+ , packages.load_date
+FROM `warm-tokenizer-455319-m9.L0_crm.product_purchase` packages
+LEFT JOIN `warm-tokenizer-455319-m9.L1.L1_product` product ON product.product_id = packages.id_package_template
+LEFT JOIN  `warm-tokenizer-455319-m9.L1.L1_status` status ON status.product_status_id = packages.package_status 
+;
+
+
