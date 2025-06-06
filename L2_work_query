@@ -1,0 +1,114 @@
+--L2 product
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L2.L2_product` AS
+SELECT
+ product_id   
+ , product_name
+ , product_type 
+ , product_category
+FROM `warm-tokenizer-455319-m9.L1.L1_product`
+WHERE product_category IN ("product", "rent") -- definováno klientem, že pouze tyto kategorie
+;
+
+
+--L2 branch
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L2.L2_branch` AS
+SELECT
+ branch_id
+ , branch_name
+FROM `warm-tokenizer-455319-m9.L1.L1_branch`
+WHERE branch_name != "unknown" -- nechceme neznámé kategorie
+;
+
+
+
+-- L2_invoice
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L2.L2_invoice` AS
+SELECT
+ invoice_id
+ , invoice_previous_id --Id of previous invoice. if it's not null, means that current invoice id is credit note or return of the id_invoice_old
+ , contract_id -- FK
+ , invoice_status_id
+ , flag_invoice_issued -- Invoice status. Invoice status < 100  have been issued. >= 100 - not issued
+ , date_issue
+ , due_date
+ , paid_date
+ , start_date
+ , end_date
+ , insert_date
+ , update_date
+ , amount_w_vat
+ , IF(amount_w_vat <= 0, 0 , (amount_w_vat/1.2)) AS amount_wo_vat -- dle informací klienta, chceme cenu bez DPH, které je vždy 20%
+ , flag_paid_currier
+ , invoice_type_id  -- Invoice_type: 1 - invoice, 3 -  credit_note, 2 - return, 4 - other
+ , invoice_type
+ , invoice_number
+ , return_w_vat
+ , ROW_NUMBER() OVER(PARTITION BY contract_id ORDER BY date_issue ASC) AS invoice_order -- kolikátá faktura v pořadí na jeden kontrakt na základě date_issue a contract_id
+
+FROM `warm-tokenizer-455319-m9.L1.L1_invoice`
+WHERE flag_invoice_issued is true  -- dle informací klienta pouze flag_invoice_issued hodnoty
+  AND invoice_type = "invoice" -- dle informací klienta pouze typ invoice
+ORDER BY contract_id, date_issue
+;
+
+
+
+
+--L2_contract
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L2.L2_contract` AS
+SELECT
+ contract_id
+ , branch_id
+ , contract_valid_from
+ , contract_valid_to
+ , registration_date
+ , signed_date
+ , activation_process_date
+ , prolongation_date
+ , registration_end_reason
+ , flag_prolongation --if contract  was prolonged
+ , flag_send_email -- If the invoice is sent as email. True - yes, false - other methods
+ , contract_status
+FROM `warm-tokenizer-455319-m9.L1.L1_contract` 
+WHERE registration_date is not null -- požadavek klienta - opravu byli kontrakty uzavřené, když mají registration_date
+;
+
+
+--L2_product_purchase
+CREATE OR REPLACE VIEW `warm-tokenizer-455319-m9.L2.L2_product_purchase` AS
+SELECT
+ product_purchase_id  -- PK
+ , contract_id  -- FK
+ , product_id  -- FK
+ , create_date
+ , product_valid_from
+ , product_valid_to
+ , price_wo_vat
+ , IF(price_wo_vat <= 0, 0, price_wo_vat*1.2) AS price_w_vat -- dopočítamé cenu s daní, která je vždy 20%
+ , date_update
+ , product_status
+ , product_name
+ , product_type
+ , product_category
+ , measure_unit
+ , IF(product_valid_from = '2035-12-31', TRUE, FALSE) as flag_unlimited_product
+FROM `warm-tokenizer-455319-m9.L1.L1_product_purchase`
+WHERE product_category IN ("product", "rent") -- definovno klientem, že pouze tyto kategorie
+  AND product_status IS NOT NULL
+  AND product_status NOT IN ("canceled", "canceled registration", "disconnected")  -- definováno klientem, že product_status nesmí být prázdny nebo zrušený
+  AND product_valid_from IS NOT NULL -- definovanáno s product ownerem, že pouze produkty, co mají vyplněné datum from
+  AND product_valid_to IS NOT NULL -- definovanáno s product ownerem, že pouze produkty, co mají vyplněné datum to
+;
+
+
+
+
+
+
+
+
+
+
+
+
+
