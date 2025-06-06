@@ -15,5 +15,5 @@ The queries are part of the hands-on exercises, assignments, and project work do
 - This repository is **not an official Czechitas resource**.
 - It is intended for **personal learning and sharing among course participants**.
 
----
+--
 Happy querying!
