@@ -9,7 +9,7 @@ The queries are part of the hands-on exercises, assignments, and project work do
 - Query patterns commonly used in data engineering workflows
 
 ## About the Course
-[Czechitas Data Engineering](https://www.czechitas.cz/) is a practical course focused on modern data pipelines, databases, and data processing tools. It is designed to teach the foundations of data engineering in a real-world context.
+[Czechitas Data Engineering](https://www.czechitas.cz/kurzy/datove-inzenyrstvi-v-praxi) is a practical course focused on modern data pipelines, databases, and data processing tools. It is designed to teach the foundations of data engineering in a real-world context.
 
 ## Notes
 - This repository is **not an official Czechitas resource**.
